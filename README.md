@@ -28,7 +28,10 @@ VLLM_HUST_RUNTIME_MICRO_OPTIMIZATIONS=empty-padding,qsl-reuse \
 
 Unknown selectors and incompatible Host source fail closed. A successful
 installation can be audited with
-`vllm_hust_runtime_micro_optimizations.receipt()`.
+`vllm_hust_runtime_micro_optimizations.receipt()`. Selected workers also emit
+`VLLM_HUST_RUNTIME_MICRO_RECEIPT` JSON records when hooks install and when a
+reviewed mechanism is first exercised; benchmark custody must retain these
+records separately for every rank.
 
 ## Compatibility check
 

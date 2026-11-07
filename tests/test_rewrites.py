@@ -14,6 +14,7 @@ def test_empty_padding_rewrite_guards_both_writes():
     result = guard_empty_padding(source)
     assert "if num_tokens < num_tokens_padded:" in result
     assert "if num_reqs < num_reqs_padded:" in result
+    assert result.count("_runtime_micro_emit_activation") == 2
     compile(result, "<test>", "exec")
 
 
@@ -24,7 +25,9 @@ def test_empty_padding_rewrite_fails_closed(missing):
     blk_table_tensor[num_reqs:num_reqs_padded].fill_(0)
 """
     with pytest.raises(RuntimeError):
-        guard_empty_padding("\n".join(line for line in source.splitlines() if missing not in line))
+        guard_empty_padding(
+            "\n".join(line for line in source.splitlines() if missing not in line)
+        )
 
 
 def test_qsl_rewrite_changes_only_reviewed_expression():

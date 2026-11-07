@@ -5,6 +5,8 @@ from __future__ import annotations
 import functools
 import hashlib
 import inspect
+import json
+import logging
 import os
 import textwrap
 import types
@@ -15,6 +17,8 @@ from .rewrites import guard_empty_padding, reuse_query_start_location
 
 _KNOWN = {"empty-padding", "qsl-reuse", "residual-scale"}
 _INSTALLED: dict[str, tuple[object, str, object]] = {}
+_EMITTED_EVENTS: set[str] = set()
+_LOGGER = logging.getLogger(__name__)
 _STATE = {
     "host_revision": HOST_REVISION,
     "selected": [],
@@ -39,7 +43,21 @@ _STATE = {
 }
 
 
-def _replace_method(owner, name: str, transform, relative_path: str, globals_: dict) -> None:
+def _emit_receipt_once(event: str) -> None:
+    """Emit one machine-readable receipt per worker and activation event."""
+    if event in _EMITTED_EVENTS:
+        return
+    _EMITTED_EVENTS.add(event)
+    payload = receipt()
+    payload.update({"event": event, "pid": os.getpid()})
+    _LOGGER.info(
+        "VLLM_HUST_RUNTIME_MICRO_RECEIPT %s", json.dumps(payload, sort_keys=True)
+    )
+
+
+def _replace_method(
+    owner, name: str, transform, relative_path: str, globals_: dict
+) -> None:
     if name in _INSTALLED:
         raise RuntimeError(f"{name} is already installed")
     original = getattr(owner, name)
@@ -67,7 +85,10 @@ def _install_empty_padding() -> None:
         "_build_attention_metadata",
         guard_empty_padding,
         "vllm_ascend/worker/model_runner_v1.py",
-        {"_runtime_micro_state": _STATE},
+        {
+            "_runtime_micro_state": _STATE,
+            "_runtime_micro_emit_activation": _emit_receipt_once,
+        },
     )
 
 
@@ -101,6 +122,7 @@ def _choose_qsl(builder, common, cpu):
     if eligible:
         state["reused"] += 1
         state["avoided_bytes"] += cpu.numel() * cpu.element_size()
+        _emit_receipt_once("qsl-reuse-exercised")
         return common.query_start_loc
     state["native_copies"] += 1
     return cpu.pin_memory().to(builder.device, non_blocking=True)
@@ -176,6 +198,8 @@ def _install_residual_scale() -> None:
             module._forward_method = types.MethodType(_cached_gemma_forward, module)
             installed.append(name)
         _STATE["residual_scale"]["installed_modules"] = installed
+        if installed:
+            _emit_receipt_once("residual-scale-bound")
         return result
 
     NPUWorker.load_model = after_load
@@ -198,6 +222,8 @@ def load() -> None:
             "qsl-reuse": _install_qsl_reuse,
             "residual-scale": _install_residual_scale,
         }[item]()
+    if selected:
+        _emit_receipt_once("hooks-installed")
 
 
 def receipt() -> dict:
@@ -207,6 +233,8 @@ def receipt() -> dict:
     result = copy.deepcopy(_STATE)
     result["installed"] = sorted(_INSTALLED)
     result["receipt_sha256"] = hashlib.sha256(
-        repr((result["host_revision"], result["selected"], result["installed"])).encode()
+        repr(
+            (result["host_revision"], result["selected"], result["installed"])
+        ).encode()
     ).hexdigest()
     return result
