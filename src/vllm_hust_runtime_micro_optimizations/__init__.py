@@ -50,7 +50,10 @@ def _emit_receipt_once(event: str) -> None:
     _EMITTED_EVENTS.add(event)
     payload = receipt()
     payload.update({"event": event, "pid": os.getpid()})
-    _LOGGER.info(
+    # Plugin loading often happens before vLLM configures INFO handlers.  A
+    # warning-level custody record is deliberate: selected MODs must never be
+    # silent in benchmark logs.
+    _LOGGER.warning(
         "VLLM_HUST_RUNTIME_MICRO_RECEIPT %s", json.dumps(payload, sort_keys=True)
     )
 

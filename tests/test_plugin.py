@@ -38,7 +38,7 @@ def test_selected_load_emits_structured_receipt(monkeypatch, caplog):
     module = fresh_module()
     monkeypatch.setattr(module, "_install_empty_padding", lambda: None)
 
-    with caplog.at_level(logging.INFO):
+    with caplog.at_level(logging.WARNING):
         module.load()
 
     line = next(
