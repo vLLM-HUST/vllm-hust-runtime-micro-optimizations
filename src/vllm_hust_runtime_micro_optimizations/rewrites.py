@@ -24,7 +24,9 @@ def guard_empty_padding(source: str) -> str:
         lines = source.splitlines()
         matches = [i for i, line in enumerate(lines) if line.strip() == expression]
         if len(matches) != 1:
-            raise RuntimeError(f"Expected one Host seam for {expression!r}; got {matches}")
+            raise RuntimeError(
+                f"Expected one Host seam for {expression!r}; got {matches}"
+            )
         index = matches[0]
         indent = lines[index][: len(lines[index]) - len(lines[index].lstrip())]
         lines[index : index + 1] = [
@@ -33,6 +35,7 @@ def guard_empty_padding(source: str) -> str:
             f"{indent}    _runtime_micro_state['empty_padding']['executed_{counter}_fills'] += 1",
             f"{indent}else:",
             f"{indent}    _runtime_micro_state['empty_padding']['skipped_{counter}_fills'] += 1",
+            f"{indent}_runtime_micro_emit_activation('empty-padding-exercised')",
         ]
         source = "\n".join(lines) + "\n"
     return source
